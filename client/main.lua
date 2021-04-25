@@ -25,174 +25,242 @@ function cleanPlayer(playerPed)
 	ResetPedMovementClipset(playerPed, 0)
 end
 
+
 function OpenDOJActionsMenu()
 	ESX.UI.Menu.CloseAll()
 
-	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'DOJ_actions', {
-		title    = 'DOJ',
+	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'doj_actions', {
+		title    = _U('DOJ'),
 		align    = 'top-left',
 		elements = {
-			{label = _U('citizen_interaction'), value = 'citizen_interaction'},
-			{label = _U('vehicle_interaction'), value = 'vehicle_interaction'},
-			{label = _U('object_spawner'), value = 'object_spawner'}
+			{label = _U('billing'),       value = 'billing'},
 	}}, function(data, menu)
-		if data.current.value == 'citizen_interaction' then
-			local elements = {
-				{label = _U('id_card'), value = 'identity_card'},
-				{label = _U('search'), value = 'search'},
-				{label = _U('handcuff'), value = 'handcuff'},
-				{label = _U('drag'), value = 'drag'},
-				{label = _U('put_in_vehicle'), value = 'put_in_vehicle'},
-				{label = _U('out_the_vehicle'), value = 'out_the_vehicle'},
-				{label = _U('fine'), value = 'fine'},
-				{label = _U('unpaid_bills'), value = 'unpaid_bills'}
-			}
+		if isBusy then return end
 
-			if Config.EnableLicenses then
-				table.insert(elements, {label = _U('license_check'), value = 'license'})
+		if data.current.value == 'billing' then
+			ESX.UI.Menu.Open('dialog', GetCurrentResourceName(), 'billing', {
+				title = _U('invoice_amount')
+			}, function(data, menu)
+				local amount = tonumber(data.value)
+
+				if amount == nil or amount < 0 then
+					ESX.ShowNotification(_U('amount_invalid'))
+				else
+					local closestPlayer, closestDistance = ESX.Game.GetClosestPlayer()
+					if closestPlayer == -1 or closestDistance > 3.0 then
+						ESX.ShowNotification(_U('no_players_nearby'))
+					else
+						menu.close()
+						TriggerServerEvent('esx_billing:sendBill', GetPlayerServerId(closestPlayer), 'society_doj', _U('DOJ'), amount)
+					end
+				end
+			end, function(data, menu)
+				menu.close()
+			end)
+		elseif data.current.value == 'hijack_vehicle' then
+			local playerPed = PlayerPedId()
+			local vehicle = ESX.Game.GetVehicleInDirection()
+			local coords = GetEntityCoords(playerPed)
+
+			if IsPedSittingInAnyVehicle(playerPed) then
+				ESX.ShowNotification(_U('inside_vehicle'))
+				return
 			end
 
-			ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'citizen_interaction', {
-				title    = _U('citizen_interaction'),
-				align    = 'top-left',
-				elements = elements
-			}, function(data2, menu2)
-				local closestPlayer, closestDistance = ESX.Game.GetClosestPlayer()
-				if closestPlayer ~= -1 and closestDistance <= 3.0 then
-					local action = data2.current.value
+			if DoesEntityExist(vehicle) then
+				isBusy = true
+				TaskStartScenarioInPlace(playerPed, 'WORLD_HUMAN_WELDING', 0, true)
+				Citizen.CreateThread(function()
+					Citizen.Wait(10000)
 
-					if action == 'identity_card' then
-						OpenIdentityCardMenu(closestPlayer)
-					elseif action == 'fine' then
-						OpenFineMenu(closestPlayer)
-					elseif action == 'license' then
-						ShowPlayerLicense(closestPlayer)
-					elseif action == 'unpaid_bills' then
-						OpenUnpaidBillsMenu(closestPlayer)
+					SetVehicleDoorsLocked(vehicle, 1)
+					SetVehicleDoorsLockedForAllPlayers(vehicle, false)
+					ClearPedTasksImmediately(playerPed)
+
+					ESX.ShowNotification(_U('vehicle_unlocked'))
+					isBusy = false
+				end)
+			else
+				ESX.ShowNotification(_U('no_vehicle_nearby'))
+			end
+		elseif data.current.value == 'fix_vehicle' then
+			local playerPed = PlayerPedId()
+			local vehicle   = ESX.Game.GetVehicleInDirection()
+			local coords    = GetEntityCoords(playerPed)
+
+			if IsPedSittingInAnyVehicle(playerPed) then
+				ESX.ShowNotification(_U('inside_vehicle'))
+				return
+			end
+
+			if DoesEntityExist(vehicle) then
+				isBusy = true
+				TaskStartScenarioInPlace(playerPed, 'PROP_HUMAN_BUM_BIN', 0, true)
+				Citizen.CreateThread(function()
+					Citizen.Wait(20000)
+
+					SetVehicleFixed(vehicle)
+					SetVehicleDeformationFixed(vehicle)
+					SetVehicleUndriveable(vehicle, false)
+					SetVehicleEngineOn(vehicle, true, true)
+					ClearPedTasksImmediately(playerPed)
+
+					ESX.ShowNotification(_U('vehicle_repaired'))
+					isBusy = false
+				end)
+			else
+				ESX.ShowNotification(_U('no_vehicle_nearby'))
+			end
+		elseif data.current.value == 'clean_vehicle' then
+			local playerPed = PlayerPedId()
+			local vehicle   = ESX.Game.GetVehicleInDirection()
+			local coords    = GetEntityCoords(playerPed)
+
+			if IsPedSittingInAnyVehicle(playerPed) then
+				ESX.ShowNotification(_U('inside_vehicle'))
+				return
+			end
+
+			if DoesEntityExist(vehicle) then
+				isBusy = true
+				TaskStartScenarioInPlace(playerPed, 'WORLD_HUMAN_MAID_CLEAN', 0, true)
+				Citizen.CreateThread(function()
+					Citizen.Wait(10000)
+
+					SetVehicleDirtLevel(vehicle, 0)
+					ClearPedTasksImmediately(playerPed)
+
+					ESX.ShowNotification(_U('vehicle_cleaned'))
+					isBusy = false
+				end)
+			else
+				ESX.ShowNotification(_U('no_vehicle_nearby'))
+			end
+		elseif data.current.value == 'del_vehicle' then
+			local playerPed = PlayerPedId()
+
+			if IsPedSittingInAnyVehicle(playerPed) then
+				local vehicle = GetVehiclePedIsIn(playerPed, false)
+
+				if GetPedInVehicleSeat(vehicle, -1) == playerPed then
+					ESX.ShowNotification(_U('vehicle_impounded'))
+					ESX.Game.DeleteVehicle(vehicle)
+				else
+					ESX.ShowNotification(_U('must_seat_driver'))
+				end
+			else
+				local vehicle = ESX.Game.GetVehicleInDirection()
+
+				if DoesEntityExist(vehicle) then
+					ESX.ShowNotification(_U('vehicle_impounded'))
+					ESX.Game.DeleteVehicle(vehicle)
+				else
+					ESX.ShowNotification(_U('must_near'))
+				end
+			end
+		elseif data.current.value == 'dep_vehicle' then
+			local playerPed = PlayerPedId()
+			local vehicle = GetVehiclePedIsIn(playerPed, true)
+
+			local towmodel = GetHashKey('flatbed')
+			local isVehicleTow = IsVehicleModel(vehicle, towmodel)
+
+			if isVehicleTow then
+				local targetVehicle = ESX.Game.GetVehicleInDirection()
+
+				if CurrentlyTowedVehicle == nil then
+					if targetVehicle ~= 0 then
+						if not IsPedInAnyVehicle(playerPed, true) then
+							if vehicle ~= targetVehicle then
+								AttachEntityToEntity(targetVehicle, vehicle, 20, -0.5, -5.0, 1.0, 0.0, 0.0, 0.0, false, false, false, false, 20, true)
+								CurrentlyTowedVehicle = targetVehicle
+								ESX.ShowNotification(_U('vehicle_success_attached'))
+
+								if NPCOnJob then
+									if NPCTargetTowable == targetVehicle then
+										ESX.ShowNotification(_U('please_drop_off'))
+										Config.Zones.VehicleDelivery.Type = 1
+
+										if Blips['NPCTargetTowableZone'] then
+											RemoveBlip(Blips['NPCTargetTowableZone'])
+											Blips['NPCTargetTowableZone'] = nil
+										end
+
+										Blips['NPCDelivery'] = AddBlipForCoord(Config.Zones.VehicleDelivery.Pos.x, Config.Zones.VehicleDelivery.Pos.y, Config.Zones.VehicleDelivery.Pos.z)
+										SetBlipRoute(Blips['NPCDelivery'], true)
+									end
+								end
+							else
+								ESX.ShowNotification(_U('cant_attach_own_tt'))
+							end
+						end
+					else
+						ESX.ShowNotification(_U('no_veh_att'))
 					end
 				else
-					ESX.ShowNotification(_U('no_players_nearby'))
+					AttachEntityToEntity(CurrentlyTowedVehicle, vehicle, 20, -0.5, -12.0, 1.0, 0.0, 0.0, 0.0, false, false, false, false, 20, true)
+					DetachEntity(CurrentlyTowedVehicle, true, true)
+
+					if NPCOnJob then
+						if NPCTargetDeleterZone then
+
+							if CurrentlyTowedVehicle == NPCTargetTowable then
+								ESX.Game.DeleteVehicle(NPCTargetTowable)
+								TriggerServerEvent('dojjob:onNPCJobMissionCompleted')
+								StopNPCJob()
+								NPCTargetDeleterZone = false
+							else
+								ESX.ShowNotification(_U('not_right_veh'))
+							end
+
+						else
+							ESX.ShowNotification(_U('not_right_place'))
+						end
+					end
+
+					CurrentlyTowedVehicle = nil
+					ESX.ShowNotification(_U('veh_det_succ'))
 				end
+			else
+				ESX.ShowNotification(_U('imp_flatbed'))
+			end
+		elseif data.current.value == 'object_spawner' then
+			local playerPed = PlayerPedId()
+
+			if IsPedSittingInAnyVehicle(playerPed) then
+				ESX.ShowNotification(_U('inside_vehicle'))
+				return
+			end
+
+			ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'mobile_mechanic_actions_spawn', {
+				title    = _U('objects'),
+				align    = 'top-left',
+				elements = {
+					{label = _U('roadcone'), value = 'prop_roadcone02a'},
+					{label = _U('toolbox'),  value = 'prop_toolchest_01'}
+			}}, function(data2, menu2)
+				local model   = data2.current.value
+				local coords  = GetEntityCoords(playerPed)
+				local forward = GetEntityForwardVector(playerPed)
+				local x, y, z = table.unpack(coords + forward * 1.0)
+
+				if model == 'prop_roadcone02a' then
+					z = z - 2.0
+				elseif model == 'prop_toolchest_01' then
+					z = z - 2.0
+				end
+
+				ESX.Game.SpawnObject(model, {x = x, y = y, z = z}, function(obj)
+					SetEntityHeading(obj, GetEntityHeading(playerPed))
+					PlaceObjectOnGroundProperly(obj)
+				end)
 			end, function(data2, menu2)
 				menu2.close()
-			end)		
-	end, function(data, menu)
-		menu.close()
-	end)
-end
-
-function OpenIdentityCardMenu(player)
-	ESX.TriggerServerCallback(':getOtherPlayerData', function(data)
-		local elements = {
-			{label = _U('name', data.name)},
-			{label = _U('job', ('%s - %s'):format(data.job, data.grade))}
-		}
-
-		if Config.EnableESXIdentity then
-			table.insert(elements, {label = _U('sex', _U(data.sex))})
-			table.insert(elements, {label = _U('dob', data.dob)})
-			table.insert(elements, {label = _U('height', data.height)})
-		end
-
-		if data.drunk then
-			table.insert(elements, {label = _U('bac', data.drunk)})
-		end
-
-		if data.licenses then
-			table.insert(elements, {label = _U('license_label')})
-
-			for i=1, #data.licenses, 1 do
-				table.insert(elements, {label = data.licenses[i].label})
-			end
-		end
-
-		ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'citizen_interaction', {
-			title    = _U('citizen_interaction'),
-			align    = 'top-left',
-			elements = elements
-		}, nil, function(data, menu)
-			menu.close()
-		end)
-	end, GetPlayerServerId(player))
-end
-
-
-if data.current.value == 'billing' then
-	ESX.UI.Menu.Open('dialog', GetCurrentResourceName(), 'billing', {
-		title = _U('invoice_amount')
-	}, function(data, menu)
-		local amount = tonumber(data.value)
-
-		if amount == nil or amount < 0 then
-			ESX.ShowNotification(_U('amount_invalid'))
-		else
-			local closestPlayer, closestDistance = ESX.Game.GetClosestPlayer()
-			if closestPlayer == -1 or closestDistance > 3.0 then
-				ESX.ShowNotification(_U('no_players_nearby'))
-			else
-				menu.close()
-				TriggerServerEvent('esx_billing:sendBill', GetPlayerServerId(closestPlayer), 'society_doj', _U('doj'), amount)
-			end
-		end
-	end, function(data, menu)
-		menu.close()
-	end)
-
-
-function ShowPlayerLicense(player)
-	local elements = {}
-
-	ESX.TriggerServerCallback('DOJ_JOB:getOtherPlayerData', function(playerData)
-		if playerData.licenses then
-			for i=1, #playerData.licenses, 1 do
-				if playerData.licenses[i].label and playerData.licenses[i].type then
-					table.insert(elements, {
-						label = playerData.licenses[i].label,
-						type = playerData.licenses[i].type
-					})
-				end
-			end
-		end
-
-		ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'manage_license', {
-			title    = _U('license_revoke'),
-			align    = 'top-left',
-			elements = elements,
-		}, function(data, menu)
-			ESX.ShowNotification(_U('licence_you_revoked', data.current.label, playerData.name))
-			TriggerServerEvent('DOJ_JOB:message', GetPlayerServerId(player), _U('license_revoked', data.current.label))
-
-			TriggerServerEvent('esx_license:removeLicense', GetPlayerServerId(player), data.current.type)
-
-			ESX.SetTimeout(300, function()
-				ShowPlayerLicense(player)
 			end)
-		end, function(data, menu)
-			menu.close()
-		end)
-
-	end, GetPlayerServerId(player))
-end
-
-function OpenUnpaidBillsMenu(player)
-	local elements = {}
-
-	ESX.TriggerServerCallback('esx_billing:getTargetBills', function(bills)
-		for k,bill in ipairs(bills) do
-			table.insert(elements, {
-				label = ('%s - <span style="color:red;">%s</span>'):format(bill.label, _U('armory_item', ESX.Math.GroupDigits(bill.amount))),
-				billId = bill.id
-			})
 		end
-
-		ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'billing', {
-			title    = _U('unpaid_bills'),
-			align    = 'top-left',
-			elements = elements
-		}, nil, function(data, menu)
-			menu.close()
-		end)
-	end, GetPlayerServerId(player))
+	end, function(data, menu)
+		menu.close()
+	end)
 end
 
 
@@ -201,7 +269,7 @@ AddEventHandler('esx:setJob', function(job)
 	ESX.PlayerData.job = job
 
 	Citizen.Wait(5000)
-	TriggerServerEvent('DOJ_JOB:forceBlip')
+	TriggerServerEvent('dojjob:forceBlip')
 end)
 
 RegisterNetEvent('esx_phone:loaded')
@@ -215,17 +283,8 @@ AddEventHandler('esx_phone:loaded', function(phoneNumber, contacts)
 	TriggerEvent('esx_phone:addSpecialContact', specialContact.name, specialContact.number, specialContact.base64Icon)
 end)
 
--- don't show dispatches if the player isn't in service
-AddEventHandler('esx_phone:cancelMessage', function(dispatchNumber)
-	if ESX.PlayerData.job and ESX.PlayerData.job.name == 'doj' and ESX.PlayerData.job.name == dispatchNumber then
-		-- if esx_service is enabled
-		if Config.EnableESXService and not playerInService then
-			CancelEvent()
-		end
-	end
-end)
 
-AddEventHandler('DOJ_JOB:hasEnteredMarker', function(station, part, partNum)
+AddEventHandler('dojjob:hasEnteredMarker', function(station, part, partNum)
 	if part == 'BossActions' then
 		CurrentAction     = 'menu_boss_actions'
 		CurrentActionMsg  = _U('open_bossmenu')
@@ -233,7 +292,7 @@ AddEventHandler('DOJ_JOB:hasEnteredMarker', function(station, part, partNum)
 	end
 end)
 
-AddEventHandler('DOJ_JOB:hasExitedMarker', function(station, part, partNum)
+AddEventHandler('dojjob:hasExitedMarker', function(station, part, partNum)
 	if not isInShopMenu then
 		ESX.UI.Menu.CloseAll()
 	end
@@ -241,39 +300,11 @@ AddEventHandler('DOJ_JOB:hasExitedMarker', function(station, part, partNum)
 	CurrentAction = nil
 end)
 
-AddEventHandler('DOJ_JOB:hasEnteredEntityZone', function(entity)
-	local playerPed = PlayerPedId()
-
-	if ESX.PlayerData.job and ESX.PlayerData.job.name == 'doj' and IsPedOnFoot(playerPed) then
-		CurrentAction     = 'remove_entity'
-		CurrentActionMsg  = _U('remove_prop')
-		CurrentActionData = {entity = entity}
-	end
-
-	if GetEntityModel(entity) == GetHashKey('p_ld_stinger_s') then
-		local playerPed = PlayerPedId()
-		local coords    = GetEntityCoords(playerPed)
-
-		if IsPedInAnyVehicle(playerPed, false) then
-			local vehicle = GetVehiclePedIsIn(playerPed)
-
-			for i=0, 7, 1 do
-				SetVehicleTyreBurst(vehicle, i, true, 1000)
-			end
-		end
-	end
-end)
-
-AddEventHandler('DOJ_JOB:hasExitedEntityZone', function(entity)
-	if CurrentAction == 'remove_entity' then
-		CurrentAction = nil
-	end
-end)
 
 
 -- Create blips
 Citizen.CreateThread(function()
-	for k,v in pairs(Config.DOJ) do
+	for k,v in pairs(Config.DOJBuilding) do
 		local blip = AddBlipForCoord(v.Blip.Coords)
 
 		SetBlipSprite (blip, v.Blip.Sprite)
@@ -293,13 +324,15 @@ Citizen.CreateThread(function()
 	while true do
 		Citizen.Wait(0)
 
-		if ESX.PlayerData.job and ESX.PlayerData.job.name == 'doj' then
+		if ESX.PlayerData.job and ESX.PlayerData.job.name == 'DOJ' then
 			local playerPed = PlayerPedId()
 			local playerCoords = GetEntityCoords(playerPed)
 			local isInMarker, hasExited, letSleep = false, false, true
 			local currentStation, currentPart, currentPartNum
 
-				if Config.EnablePlayerManagement and ESX.PlayerData.job.grade_name == 'chief_of_justice' or ESX.PlayerData.job.grade_name == 'chief_judge' or ESX.PlayerData.job.grade_name == 'chief_prosecuter' then
+			for k,v in pairs(Config.DOJBuilding) do
+
+				if Config.EnablePlayerManagement and ESX.PlayerData.job.grade_name == 'boss' then
 					for i=1, #v.BossActions, 1 do
 						local distance = #(playerCoords - v.BossActions[i])
 
@@ -314,13 +347,14 @@ Citizen.CreateThread(function()
 					end
 				end
 			end
+			
 
 			if isInMarker and not HasAlreadyEnteredMarker or (isInMarker and (LastStation ~= currentStation or LastPart ~= currentPart or LastPartNum ~= currentPartNum)) then
 				if
 					(LastStation and LastPart and LastPartNum) and
 					(LastStation ~= currentStation or LastPart ~= currentPart or LastPartNum ~= currentPartNum)
 				then
-					TriggerEvent('DOJ_JOB:hasExitedMarker', LastStation, LastPart, LastPartNum)
+					TriggerEvent('dojjob:hasExitedMarker', LastStation, LastPart, LastPartNum)
 					hasExited = true
 				end
 
@@ -329,62 +363,24 @@ Citizen.CreateThread(function()
 				LastPart                = currentPart
 				LastPartNum             = currentPartNum
 
-				TriggerEvent('DOJ_JOB:hasEnteredMarker', currentStation, currentPart, currentPartNum)
+				TriggerEvent('dojjob:hasEnteredMarker', currentStation, currentPart, currentPartNum)
 			end
 
 			if not hasExited and not isInMarker and HasAlreadyEnteredMarker then
 				HasAlreadyEnteredMarker = false
-				TriggerEvent('DOJ_JOB:hasExitedMarker', LastStation, LastPart, LastPartNum)
+				TriggerEvent('dojjob:hasExitedMarker', LastStation, LastPart, LastPartNum)
 			end
 
 			if letSleep then
 				Citizen.Wait(500)
 			end
-		else
+			else
 			Citizen.Wait(500)
+			
 		end
 	end
 end)
 
--- Enter / Exit entity zone events
-Citizen.CreateThread(function()
-
-	while true do
-		Citizen.Wait(500)
-
-		local playerPed = PlayerPedId()
-		local playerCoords = GetEntityCoords(playerPed)
-
-		local closestDistance = -1
-		local closestEntity   = nil
-
-		for i=1, #trackedEntities, 1 do
-			local object = GetClosestObjectOfType(playerCoords, 3.0, GetHashKey(trackedEntities[i]), false, false, false)
-
-			if DoesEntityExist(object) then
-				local objCoords = GetEntityCoords(object)
-				local distance = #(playerCoords - objCoords)
-
-				if closestDistance == -1 or closestDistance > distance then
-					closestDistance = distance
-					closestEntity   = object
-				end
-			end
-		end
-
-		if closestDistance ~= -1 and closestDistance <= 3.0 then
-			if LastEntity ~= closestEntity then
-				TriggerEvent('DOJ_JOB:hasEnteredEntityZone', closestEntity)
-				LastEntity = closestEntity
-			end
-		else
-			if LastEntity then
-				TriggerEvent('DOJ_JOB:hasExitedEntityZone', LastEntity)
-				LastEntity = nil
-			end
-		end
-	end
-end)
 
 -- Key Controls
 Citizen.CreateThread(function()
@@ -394,32 +390,38 @@ Citizen.CreateThread(function()
 		if CurrentAction then
 			ESX.ShowHelpNotification(CurrentActionMsg)
 
-			if IsControlJustReleased(0, 38) and ESX.PlayerData.job and ESX.PlayerData.job.name == 'doj' then
+			if IsControlJustReleased(0, 38) and ESX.PlayerData.job and ESX.PlayerData.job.name == 'DOJ' then
 
 				if CurrentAction == 'menu_boss_actions' then
 					ESX.UI.Menu.CloseAll()
-					TriggerEvent('esx_society:openBossMenu', 'doj', function(data, menu)
+					TriggerEvent('esx_society:openBossMenu', 'DOJ', function(data, menu)
 						menu.close()
 
 						CurrentAction     = 'menu_boss_actions'
 						CurrentActionMsg  = _U('open_bossmenu')
 						CurrentActionData = {}
 					end, { wash = false }) -- disable washing money
+				elseif CurrentAction == 'remove_entity' then
+					DeleteEntity(CurrentActionData.entity)
+				end
 
 				CurrentAction = nil
 			end
 		end -- CurrentAction end
-end)
 
--- Create blip for colleagues
+		if IsControlJustReleased(0, 167) and not isDead and ESX.PlayerData.job and ESX.PlayerData.job.name == 'DOJ' and not ESX.UI.Menu.IsOpen('default', GetCurrentResourceName(), 'doj_actions') then
+				OpenDOJActionsMenu()
+		end
+	end
+end)
 
 
 AddEventHandler('playerSpawned', function(spawn)
 	isDead = false
-	TriggerEvent('DOJ_JOB:unrestrain')
+	TriggerEvent('dojjob:unrestrain')
 
 	if not hasAlreadyJoined then
-		TriggerServerEvent('DOJ_JOB:spawned')
+		TriggerServerEvent('dojjob:spawned')
 	end
 	hasAlreadyJoined = true
 end)
@@ -430,15 +432,11 @@ end)
 
 AddEventHandler('onResourceStop', function(resource)
 	if resource == GetCurrentResourceName() then
-		TriggerEvent('DOJ_JOB:unrestrain')
+		TriggerEvent('dojjob:unrestrain')
 		TriggerEvent('esx_phone:removeSpecialContact', 'doj')
 
 		if Config.EnableESXService then
 			TriggerServerEvent('esx_service:disableService', 'doj')
-		end
-
-		if Config.EnableHandcuffTimer and handcuffTimer.active then
-			ESX.ClearTimeout(handcuffTimer.task)
 		end
 	end
 end)

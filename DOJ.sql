@@ -12,8 +12,8 @@ INSERT INTO `addon_inventory` (name, label, shared) VALUES
 	('society_doj', 'DOJ', 1)
 ;
 
-INSERT INTO `jobs` (name, label) VALUES
-	('DOJ', 'DOJ')
+INSERT INTO `jobs` (name, label, whitelisted) VALUES
+	('DOJ', 'DOJ', 1)
 ;
 
 INSERT INTO `job_grades` (job_name, grade, name, label, salary, skin_male, skin_female) VALUES
@@ -23,7 +23,7 @@ INSERT INTO `job_grades` (job_name, grade, name, label, salary, skin_male, skin_
 	('DOJ',3,'judge','Judge',3800,'{}','{}'),
 	('DOJ',4,'chief_prosecuter','Chief Prosecuter',4000,'{}','{}'),
 	('DOJ',5,'chief_judge','Chief Judge',4000,'{}','{}'),
-	('DOJ',6,'chief_of_justice','Chief of Justice',4500,'{}','{}')
+	('DOJ',6,'boss','Chief of Justice',4500,'{}','{}')
 ;
 
 
