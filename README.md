@@ -7,4 +7,4 @@ A Working FiveM Deparment of Justice Job
 
 
 ----------
-Based on the esx_policejob & esx_mechanicjpb
+Based on the esx_policejob & esx_mechanicjob
